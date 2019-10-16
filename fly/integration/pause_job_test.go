@@ -70,7 +70,7 @@ var _ = Describe("Fly CLI", func() {
 
 					It("successfully pauses the job", func() {
 						Expect(func() {
-							flyCmd = exec.Command(flyPath, "-t", "some-target", "pause-job", "-j", fullJobName, "-n", "other-team")
+							flyCmd = exec.Command(flyPath, "-t", "some-target", "pause-job", "-j", fullJobName, "--team-name", "other-team")
 							sess, err := gexec.Start(flyCmd, GinkgoWriter, GinkgoWriter)
 							Expect(err).NotTo(HaveOccurred())
 							<-sess.Exited
@@ -98,7 +98,7 @@ var _ = Describe("Fly CLI", func() {
 					It("exits 1 and outputs the corresponding error", func() {
 						Expect(func() {
 
-							flyCmd = exec.Command(flyPath, "-t", "some-target", "pause-job", "-j", "random-pipeline/random-job", "-n", "random-team")
+							flyCmd = exec.Command(flyPath, "-t", "some-target", "pause-job", "-j", "random-pipeline/random-job", "--team-name", "random-team")
 
 							sess, err := gexec.Start(flyCmd, GinkgoWriter, GinkgoWriter)
 							Expect(err).NotTo(HaveOccurred())
