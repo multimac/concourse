@@ -338,6 +338,15 @@ Graph.prototype.collapseEquivalentNodes = function() {
 }
 
 Graph.prototype.addSpacingNodes = function() {
+  function dictEquals(left, right) {
+    if (left === undefined || right === undefined) {
+      return (left === undefined && right === undefined);
+    }
+
+    return Object.keys(left).length == Object.keys(right).length
+      && Object.keys(left).every(key => left[key] === right[key]);
+  }
+
   var edgesBySourceRank = [];
   for (var e in this._edges) {
     var edge = this._edges[e];
@@ -367,8 +376,25 @@ Graph.prototype.addSpacingNodes = function() {
       this.setNode(spacingNode.id, spacingNode);
       this.removeEdge(edge);
 
-      this.addEdge(source.id, spacingNode.id, edge.key, edge.customData);
+      this.addEdge(source.id, spacingNode.id, edge.key, null);
       var downstreamEdge = this.addEdge(spacingNode.id, target.id, edge.key, edge.customData);
+
+      // Iterate in reverse so we don't have to worry about decrementing 'j' when removing an edge
+      for (var j = edges.length - 1; j > i; j--) {
+        var possibleMatch = edges[j];
+
+        if (possibleMatch.source.node !== source || possibleMatch.key != edge.key) {
+          continue;
+        }
+
+        edges.splice(j, 1);
+        this.removeEdge(possibleMatch);
+
+        var updatedEdge = this.addEdge(spacingNode.id, possibleMatch.target.node.id, edge.key, possibleMatch.customData);
+        if (updatedEdge !== undefined && updatedEdge.rankLength() > 1) {
+          edgesBySourceRank[0].push(updatedEdge);
+        }
+      }
 
       if (downstreamEdge !== undefined && downstreamEdge.rankLength() > 1) {
         edgesBySourceRank[0].push(downstreamEdge);
