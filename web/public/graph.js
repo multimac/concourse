@@ -370,7 +370,7 @@ Graph.prototype.addSpacingNodes = function() {
 
       var repeatableNode = source.repeatable() ? source : target;
       var spacingNode = repeatableNode.copy();
-      spacingNode.id = [edge.id(), "spacing", i].join("-");
+      spacingNode.id = [edge.id, "spacing", i].join("-");
       spacingNode._cachedRank = source.rank() + 1;
 
       this.setNode(spacingNode.id, spacingNode);
@@ -835,14 +835,11 @@ GraphNode.prototype.passesThroughAnyNextNode = function() {
 };
 
 function Edge(source, target, key, customData) {
+  this.id = source.id() + "-to-" + target.id();
   this.source = source;
   this.target = target;
   this.key = key;
   this.customData = customData;
-}
-
-Edge.prototype.id = function() {
-  return this.source.id() + "-to-" + this.target.id();
 }
 
 Edge.prototype.rankLength = function() {

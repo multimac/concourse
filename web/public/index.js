@@ -38,32 +38,35 @@ function redrawFunction(svg, jobs, resources, newUrl) {
       }
     })
 
+    function applyHighlight(id) {
+      svgEdges.each(function(edge) {
+        if (edge.id == id || edge.source.node.id == id || edge.target.node.id == id) {
+          d3.select(this).classed({
+            active: true
+          });
+        }
+      });
+
+      svgNodes.each(function(node) {
+        var matchEdge = (edge) => (edge.id == id || edge.source.node.id == id || edge.target.node.id == id);
+        if (node.id == id || node._inEdges.some(matchEdge) || node._outEdges.some(matchEdge)) {
+          d3.select(this).classed({
+            active: true
+          })
+        }
+      });
+    }
     function highlight(thing) {
-      if (!thing.key) {
+      if (!thing.id) {
         return
       }
 
-      currentHighlight = thing.key;
-
-      svgEdges.each(function(edge) {
-        if (edge.source.key == thing.key) {
-          d3.select(this).classed({
-            active: true
-          })
-        }
-      })
-
-      svgNodes.each(function(node) {
-        if (node.key == thing.key) {
-          d3.select(this).classed({
-            active: true
-          })
-        }
-      })
+      currentHighlight = thing.id;
+      applyHighlight(currentHighlight);
     }
 
     function lowlight(thing) {
-      if (!thing.key) {
+      if (!thing.id) {
         return
       }
 
@@ -246,17 +249,7 @@ function redrawFunction(svg, jobs, resources, newUrl) {
     }
 
     if (currentHighlight) {
-      svgNodes.each(function(node) {
-        if (node.key == currentHighlight) {
-          highlight(node)
-        }
-      });
-
-      svgEdges.each(function(node) {
-        if (node.key == currentHighlight) {
-          highlight(node)
-        }
-      });
+      applyHighlight(currentHighlight);
     }
   }
 };
