@@ -80,6 +80,8 @@ Graph.prototype.addEdge = function(sourceId, targetId, key, customData) {
   target._inEdges.push(edge);
   source._outEdges.push(edge);
   this._edges.push(edge);
+
+  return edge;
 }
 
 Graph.prototype.removeEdge = function(edge) {
@@ -195,29 +197,24 @@ Graph.prototype.layout = function() {
 }
 
 Graph.prototype.computeRanks = function() {
-  var forwardNodes = {};
+  var leadingNodes = {};
 
   for (var n in this._nodes) {
     var node = this._nodes[n];
 
     if (node._inEdges.length == 0) {
       node._cachedRank = 0;
-      forwardNodes[node.id] = node;
+      leadingNodes[node.id] = node;
     }
   }
 
-  var bottomNodes = {};
-
   // walk over all nodes from left to right and determine their rank
+  var forwardNodes = Object.assign({}, leadingNodes);
   while (!objectIsEmpty(forwardNodes)) {
     var nextNodes = {};
 
     for (var n in forwardNodes) {
       var node = forwardNodes[n];
-
-      if (node._outEdges.length == 0) {
-        bottomNodes[node.id] = node;
-      }
 
       for (var e in node._outEdges) {
         var nextNode = node._outEdges[e].target.node;
@@ -240,34 +237,12 @@ Graph.prototype.computeRanks = function() {
     forwardNodes = nextNodes;
   }
 
-  var backwardNodes = bottomNodes;
-
-  // walk over all nodes from right to left and bring upstream nodes as far
-  // to the right as possible, so that edges aren't passing through ranks
-  while (!objectIsEmpty(backwardNodes)) {
-    var prevNodes = {};
-
-    for (var n in backwardNodes) {
-      var node = backwardNodes[n];
-
-      // for all upstream nodes, determine latest possible rank group by
-      // taking the minimum rank of all downstream nodes and placing it in the
-      // rank immediately preceding it
-      for (var e in node._inEdges) {
-        var prevNode = node._inEdges[e].source.node;
-
-        var latestRank = prevNode.latestPossibleRank();
-        if (latestRank !== undefined) {
-          prevNode._cachedRank = latestRank;
-        }
-
-        prevNodes[prevNode.id] = prevNode;
-      }
-    }
-
-    backwardNodes = prevNodes;
+  // Push all leading nodes as far right as possible
+  for (var n in leadingNodes) {
+    var node = leadingNodes[n];
+    node._cachedRank = node.latestPossibleRank();
   }
-};
+}
 
 Graph.prototype.collapseEquivalentNodes = function() {
   function collapse(graph, nodes, getEdgesFunc, getEdgeNodeFunc) {
@@ -363,52 +338,42 @@ Graph.prototype.collapseEquivalentNodes = function() {
 }
 
 Graph.prototype.addSpacingNodes = function() {
-  var edgesToRemove = [];
+  var edgesBySourceRank = [];
   for (var e in this._edges) {
     var edge = this._edges[e];
-    var delta = edge.target.node.rank() - edge.source.node.rank();
-    if (delta > 1) {
-      var upstreamNode = edge.source.node;
-      var downstreamNode = edge.target.node;
+    var sourceRank = edge.source.node.rank();
 
-      var repeatedNode;
-      var initialCustomData;
-      var finalCustomData;
-      if (edge.source.node.repeatable()) {
-        repeatedNode = upstreamNode;
-        initialCustomData = null;
-        finalCustomData = edge.customData;
-      } else {
-        repeatedNode = downstreamNode;
-        initialCustomData = edge.customData;
-        finalCustomData = null;
-      }
+    while(edgesBySourceRank.length <= sourceRank) {
+      edgesBySourceRank.push([]);
+    }
 
-      for (var i = 0; i < (delta - 1); i++) {
-        var spacerID = edge.id() + "-spacing-" + i;
-
-        var spacingNode = this.node(spacerID);
-        if (!spacingNode) {
-          spacingNode = repeatedNode.copy();
-          spacingNode.id = spacerID;
-          spacingNode._cachedRank = upstreamNode.rank() + 1;
-          this.setNode(spacingNode.id, spacingNode);
-        }
-
-        currentCustomData = (i == 0 ? initialCustomData : null)
-        this.addEdge(upstreamNode.id, spacingNode.id, edge.key, currentCustomData);
-
-        upstreamNode = spacingNode;
-      }
-
-      this.addEdge(upstreamNode.id, edge.target.node.id, edge.key, finalCustomData);
-
-      edgesToRemove.push(edge);
+    if (edge.rankLength() > 1) {
+      edgesBySourceRank[sourceRank].push(edge);
     }
   }
 
-  for (var e in edgesToRemove) {
-    this.removeEdge(edgesToRemove[e]);
+  while (edgesBySourceRank.length > 0) {
+    var edges = edgesBySourceRank.shift();
+    for (var i = 0; i < edges.length; i++) {
+      var edge = edges[i];
+      var source = edge.source.node;
+      var target = edge.target.node;
+
+      var repeatableNode = source.repeatable() ? source : target;
+      var spacingNode = repeatableNode.copy();
+      spacingNode.id = [edge.id(), "spacing", i].join("-");
+      spacingNode._cachedRank = source.rank() + 1;
+
+      this.setNode(spacingNode.id, spacingNode);
+      this.removeEdge(edge);
+
+      this.addEdge(source.id, spacingNode.id, edge.key, edge.customData);
+      var downstreamEdge = this.addEdge(spacingNode.id, target.id, edge.key, edge.customData);
+
+      if (downstreamEdge !== undefined && downstreamEdge.rankLength() > 1) {
+        edgesBySourceRank[0].push(downstreamEdge);
+      }
+    }
   }
 }
 
@@ -852,6 +817,10 @@ function Edge(source, target, key, customData) {
 
 Edge.prototype.id = function() {
   return this.source.id() + "-to-" + this.target.id();
+}
+
+Edge.prototype.rankLength = function() {
+  return this.target.node.rank() - this.source.node.rank();
 }
 
 Edge.prototype.bezierPoints = function() {
