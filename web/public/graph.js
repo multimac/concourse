@@ -270,56 +270,96 @@ Graph.prototype.computeRanks = function() {
 };
 
 Graph.prototype.collapseEquivalentNodes = function() {
-  var nodesByRank = [];
+  function collapse(graph, nodes, getEdgesFunc, getEdgeNodeFunc) {
+    var nodesByRank = []
+    for (var n in nodes) {
+      var node = nodes[n];
 
-  for (var n in this._nodes) {
-    var node = this._nodes[n];
-
-    var byRank = nodesByRank[node.rank()];
-    if (byRank === undefined) {
-      byRank = {};
-      nodesByRank[node.rank()] = byRank;
-    }
-
-    if (node.equivalentBy === undefined) {
-      continue;
-    }
-
-    byEqv = byRank[node.equivalentBy];
-    if (byEqv === undefined) {
-      byEqv = [];
-      byRank[node.equivalentBy] = byEqv;
-    }
-
-    byEqv.push(node);
-  }
-
-  for (var r in nodesByRank) {
-    var byEqv = nodesByRank[r];
-    for (var e in byEqv) {
-      var nodes = byEqv[e];
-      if (nodes.length == 1) {
+      if (node.resource === undefined) {
         continue;
       }
 
-      var chosenOne = nodes[0];
-      for (var i = 1; i < nodes.length; i++) {
-        var loser = nodes[i];
+      var byEqv = nodesByRank[node.rank()];
+      if (byEqv === undefined) {
+        byEqv = {};
+        nodesByRank[node.rank()] = byEqv;
+      }
 
-        for (var ie in loser._inEdges) {
-          var edge = loser._inEdges[ie];
-          this.addEdge(edge.source.node.id, chosenOne.id, edge.key, edge.customData);
+      var byEdge = byEqv[node.resource];
+      if (byEdge === undefined) {
+        byEdge = [];
+        byEqv[node.resource] = byEdge;
+      }
+
+      var matching = undefined;
+      var nodeNeighbours = getEdgesFunc(node)
+        .map(getEdgeNodeFunc).sort((l, r) => l.id > r.id);
+
+      for (var e in byEdge) {
+        var current, eqv;
+        [eqvNeighbours, eqv] = byEdge[e];
+
+        if (eqvNeighbours.length !== nodeNeighbours.length) {
+          continue;
         }
 
-        for (var oe in loser._outEdges) {
-          var edge = loser._outEdges[oe];
-          this.addEdge(chosenOne.id, edge.target.node.id, edge.key, edge.customData);
+        match = true;
+        for (var i = 0; i < eqvNeighbours.length; i++) {
+          if (eqvNeighbours[i].id !== nodeNeighbours[i].id) {
+            match = false;
+            break;
+          }
         }
 
-        this.removeNode(loser.id);
+        if (match) {
+          matching = eqv;
+          break;
+        }
+      }
+
+      if (matching === undefined) {
+        matching = [];
+        byEdge.push([nodeNeighbours, matching]);
+      }
+
+      matching.push(node);
+    }
+
+    for (var r in nodesByRank) {
+      var byEqv = nodesByRank[r];
+      for (var eqv in byEqv) {
+        byEdge = byEqv[eqv];
+        for (var edg in byEdge) {
+          var _, nodes;
+          [_, nodes] = byEdge[edg];
+
+          if (nodes.length === 1) {
+            continue;
+          }
+
+          var chosenOne = nodes[0];
+          for (var i = 1; i < nodes.length; i++) {
+            var loser = nodes[i];
+
+            for (var ie in loser._inEdges) {
+              var edge = loser._inEdges[ie];
+              graph.addEdge(edge.source.node.id, chosenOne.id, edge.key, edge.customData);
+            }
+
+            for (var oe in loser._outEdges) {
+              var edge = loser._outEdges[oe];
+              graph.addEdge(chosenOne.id, edge.target.node.id, edge.key, edge.customData);
+            }
+
+            graph.removeNode(loser.id);
+          }
+        }
       }
     }
   }
+
+  collapse(this, this._nodes, (node) => node._inEdges, (edge) => edge.source.node);
+  collapse(this, this._nodes, (node) => node._outEdges, (edge) => edge.target.node);
 }
 
 Graph.prototype.addSpacingNodes = function() {
@@ -334,7 +374,7 @@ Graph.prototype.addSpacingNodes = function() {
       var repeatedNode;
       var initialCustomData;
       var finalCustomData;
-      if (edge.source.node.repeatable) {
+      if (edge.source.node.repeatable()) {
         repeatedNode = upstreamNode;
         initialCustomData = null;
         finalCustomData = edge.customData;
@@ -557,11 +597,10 @@ function GraphNode(opts) {
   this.icon = opts.icon;
   this.class = opts.class;
   this.status = opts.status;
-  this.repeatable = opts.repeatable;
   this.key = opts.key;
   this.url = opts.url;
   this.svg = opts.svg;
-  this.equivalentBy = opts.equivalentBy;
+  this.resource = opts.resource;
 
   // DOM element
   this.label = undefined;
@@ -594,11 +633,10 @@ GraphNode.prototype.copy = function() {
     name: this.name,
     class: this.class,
     status: this.status,
-    repeatable: this.repeatable,
     key: this.key,
     url: this.url,
     svg: this.svg,
-    equivalentBy: this.equivalentBy
+    resource: this.resource
   });
 };
 
@@ -676,6 +714,10 @@ GraphNode.prototype.animationRadius = function() {
   }
 
   return 0
+}
+
+GraphNode.prototype.repeatable = function() {
+  return this.resource !== undefined;
 }
 
 GraphNode.prototype.rank = function() {

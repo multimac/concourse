@@ -399,9 +399,9 @@ function createGraph(svg, jobs, resources) {
           icon: resourceIcons[output.resource],
           key: output.resource,
           class: "output" + resourceStatus(output.resource),
-          repeatable: true,
           url: resourceURLs[output.resource],
-          svg: svg
+          svg: svg,
+          resource: output.resource
         });
 
         graph.setNode(outputId, jobOutputNode);
@@ -440,9 +440,9 @@ function createGraph(svg, jobs, resources) {
                 icon: resourceIcons[input.resource],
                 key: input.resource,
                 class: "constrained-input" + (resourcePinned[input.resource] ? " pinned" : ""),
-                repeatable: true,
                 url: resourceURLs[input.resource],
-                svg: svg
+                svg: svg,
+                resource: input.resource
               }));
             }
 
@@ -484,10 +484,9 @@ function createGraph(svg, jobs, resources) {
             key: input.resource,
             class: "input" + resourceStatus(input.resource),
             status: status,
-            repeatable: true,
             url: resourceURLs[input.resource],
             svg: svg,
-            equivalentBy: input.resource+"-unconstrained",
+            resource: input.resource
           }));
         }
 
