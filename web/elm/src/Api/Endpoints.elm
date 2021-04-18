@@ -47,6 +47,7 @@ type JobEndpoint
     | PauseJob
     | UnpauseJob
     | JobBuildsList
+    | SetJobDescription
 
 
 type BuildEndpoint
@@ -217,6 +218,9 @@ jobEndpoint endpoint =
 
         JobBuildsList ->
             [ "builds" ]
+
+        SetJobDescription ->
+            [ "description" ]
     , []
     )
 

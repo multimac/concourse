@@ -37,7 +37,9 @@ import Html.Attributes
         , class
         , href
         , id
+        , readonly
         , style
+        , value
         )
 import Html.Events
     exposing
@@ -62,6 +64,7 @@ import Time
 import Tooltip
 import UpdateMsg exposing (UpdateMsg)
 import Views.BuildDuration as BuildDuration
+import Views.Description as Description
 import Views.DictView as DictView
 import Views.Icon as Icon
 import Views.LoadingIndicator as LoadingIndicator
@@ -77,6 +80,7 @@ type alias Model =
         , buildsWithResources : WebData (Paginated BuildWithResources)
         , currentPage : Page
         , now : Time.Posix
+        , description : Description.Model
         }
 
 
@@ -118,6 +122,11 @@ init flags =
             , now = Time.millisToPosix 0
             , currentPage = page
             , isUserMenuExpanded = False
+            , description =
+                Description.init
+                    JobDescription
+                    ""
+                    Nothing
             }
     in
     ( model
@@ -187,6 +196,13 @@ handleCallback callback ( model, effects ) =
                            ]
             )
 
+        DescriptionSaved id result ->
+            let
+                ( descriptionModel, teffects ) =
+                    Description.handleDescriptionSaved id result ( model.description, effects )
+            in
+            ( { model | description = descriptionModel }, teffects )
+
         JobBuildsFetched (Ok ( requestedPage, builds )) ->
             handleJobBuildsFetched requestedPage builds ( model, effects )
 
@@ -243,6 +259,13 @@ handleCallback callback ( model, effects ) =
 handleDelivery : Delivery -> ET Model
 handleDelivery delivery ( model, effects ) =
     case delivery of
+        KeyDown keyEvent ->
+            let
+                ( descriptionModel, teffects ) =
+                    Description.handleKeyDown keyEvent ( model.description, effects )
+            in
+            ( { model | description = descriptionModel }, teffects )
+
         ClockTicked OneSecond time ->
             ( { model | now = time }, effects )
 
@@ -257,6 +280,7 @@ handleDelivery delivery ( model, effects ) =
 
         _ ->
             ( model, effects )
+
 
 
 update : Message -> ET Model
@@ -281,6 +305,20 @@ update action ( model, effects ) =
                       else
                         effects ++ [ PauseJob model.jobIdentifier ]
                     )
+
+        Click (DescriptionID _) ->
+            let
+                ( descriptionModel, teffects ) =
+                    Description.update action ( model.description, effects )
+            in
+            ( { model | description = descriptionModel }, teffects )
+
+        Description _ ->
+            let
+                ( descriptionModel, teffects ) =
+                    Description.update action ( model.description, effects )
+            in
+            ( { model | description = descriptionModel }, teffects )
 
         _ ->
             ( model, effects )
@@ -608,6 +646,7 @@ viewMainJobsSection session model =
                                     )
                                 ]
                         ]
+                    , Description.view session model.description
                     , Html.div
                         [ id "pagination-header"
                         , style "display" "flex"

@@ -23,7 +23,8 @@ import Maybe exposing (Maybe)
 import Message.Callback exposing (Callback(..))
 import Message.Message
     exposing
-        ( DomID(..)
+        ( DescriptionTarget(..)
+        , DomID(..)
         , PipelinesSection(..)
         , VersionToggleAction(..)
         , VisibilityAction(..)
@@ -158,6 +159,7 @@ type Effect
     | DoToggleVersion VersionToggleAction VersionId
     | DoCheck Concourse.ResourceIdentifier
     | SetPinComment Concourse.ResourceIdentifier String
+    | SetJobDescription Concourse.JobIdentifier String
     | SendTokenToFly String Int
     | SendTogglePipelineRequest Concourse.PipelineIdentifier Bool
     | SendOrderPipelinesRequest String (List String)
@@ -446,6 +448,15 @@ runEffect effect key csrfToken =
                     )
                 |> Api.request
                 |> Task.attempt CommentSet
+
+        SetJobDescription jid description ->
+            Api.put
+                (Endpoints.SetJobDescription |> Endpoints.Job jid)
+                csrfToken
+                |> Api.withJsonBody
+                    (Json.Encode.object [ ( "description", Json.Encode.string description ) ])
+                |> Api.request
+                |> Task.attempt (DescriptionSaved JobDescription)
 
         SendTokenToFly authToken flyPort ->
             rawHttpRequest <| Routes.tokenToFlyRoute authToken flyPort
@@ -847,6 +858,32 @@ toHtmlID domId =
 
         EditButton ->
             "edit-button"
+
+        DescriptionID ( id, target ) ->
+            (case target of
+                DescriptionContainer ->
+                    "description"
+
+                DescriptionTextarea ->
+                    "description-text-area"
+
+                DescriptionCancelButton ->
+                    "description-cancel-button"
+
+                DescriptionEditButton ->
+                    "description-edit-button"
+
+                DescriptionSaveButton ->
+                    "description-save-button"
+
+                DescriptionSavingButton ->
+                    "description-saving-button"
+            )
+                ++ "_"
+                ++ toHtmlID id
+
+        JobDescription ->
+            "job"
 
         PinButton id ->
             "pin-button_" ++ String.fromInt id.versionID

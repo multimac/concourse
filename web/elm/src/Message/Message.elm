@@ -1,5 +1,7 @@
 module Message.Message exposing
-    ( DomID(..)
+    ( DescriptionEvent(..)
+    , DescriptionTarget(..)
+    , DomID(..)
     , DropTarget(..)
     , Message(..)
     , PipelinesSection(..)
@@ -36,6 +38,8 @@ type Message
     | RevealCurrentBuildInHistory
     | SetHighlight String Int
     | ExtendHighlight String Int
+      -- Description
+    | Description ( DomID, DescriptionEvent )
       -- common
     | Hover (Maybe DomID)
     | Click DomID
@@ -55,6 +59,8 @@ type DomID
     | CheckButton Bool
     | EditButton
     | SaveCommentButton
+    | DescriptionID ( DomID, DescriptionTarget )
+    | JobDescription
     | ResourceCommentTextarea
     | ChangedStepLabel StepID String
     | StepState StepID
@@ -132,3 +138,18 @@ type alias VersionId =
 type DropTarget
     = Before String
     | End
+
+
+type DescriptionEvent
+    = EditDescription String
+    | FocusDescription
+    | BlurDescription
+
+
+type DescriptionTarget
+    = DescriptionContainer
+    | DescriptionTextarea
+    | DescriptionCancelButton
+    | DescriptionEditButton
+    | DescriptionSaveButton
+    | DescriptionSavingButton

@@ -847,6 +847,7 @@ type alias Job =
     , disableManualTrigger : Bool
     , inputs : List JobInput
     , outputs : List JobOutput
+    , description : String
     , groups : List String
     }
 
@@ -880,6 +881,7 @@ encodeJob job =
         , ( "disable_manual_trigger", job.disableManualTrigger |> Json.Encode.bool )
         , ( "inputs", job.inputs |> Json.Encode.list encodeJobInput )
         , ( "outputs", job.outputs |> Json.Encode.list encodeJobOutput )
+        , ( "description", job.description |> Json.Encode.string )
         , ( "groups", job.groups |> Json.Encode.list Json.Encode.string )
         ]
 
@@ -899,6 +901,7 @@ decodeJob =
         |> andMap (defaultTo False <| Json.Decode.field "disable_manual_trigger" Json.Decode.bool)
         |> andMap (defaultTo [] <| Json.Decode.field "inputs" <| Json.Decode.list decodeJobInput)
         |> andMap (defaultTo [] <| Json.Decode.field "outputs" <| Json.Decode.list decodeJobOutput)
+        |> andMap (defaultTo "" <| Json.Decode.field "description" Json.Decode.string)
         |> andMap (defaultTo [] <| Json.Decode.field "groups" <| Json.Decode.list Json.Decode.string)
 
 

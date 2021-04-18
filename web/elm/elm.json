@@ -8,6 +8,7 @@
     "dependencies": {
         "direct": {
             "NoRedInk/elm-simple-fuzzy": "1.0.3",
+            "dillonkearns/elm-markdown": "6.0.1",
             "elm/browser": "1.0.2",
             "elm/core": "1.0.5",
             "elm/html": "1.0.0",
@@ -34,6 +35,7 @@
             "elm/virtual-dom": "1.0.2",
             "mdgriffith/style-elements": "5.0.2",
             "robinheghan/murmur3": "1.0.0",
+            "rtfeldman/elm-hex": "1.0.0",
             "rtfeldman/elm-iso8601-date-strings": "1.1.2"
         }
     },
@@ -43,8 +45,7 @@
         },
         "indirect": {
             "avh4/elm-fifo": "1.0.4",
-            "elm/random": "1.0.0",
-            "rtfeldman/elm-hex": "1.0.0"
+            "elm/random": "1.0.0"
         }
     }
 }

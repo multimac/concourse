@@ -1,4 +1,4 @@
-module Message.Callback exposing (Callback(..))
+module Message.Callback exposing (Callback(..), Fetched)
 
 import Browser.Dom
 import Concourse
@@ -45,6 +45,7 @@ type Callback
     | VersionToggled VersionToggleAction VersionId (Fetched ())
     | Checked (Fetched Concourse.Build)
     | CommentSet (Fetched ())
+    | DescriptionSaved DomID (Fetched ())
     | AllTeamsFetched (Fetched (List Concourse.Team))
     | AllJobsFetched (Fetched (List Concourse.Job))
     | AllResourcesFetched (Fetched (List Concourse.Resource))
