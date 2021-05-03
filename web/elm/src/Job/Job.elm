@@ -122,11 +122,7 @@ init flags =
             , now = Time.millisToPosix 0
             , currentPage = page
             , isUserMenuExpanded = False
-            , description =
-                Description.init
-                    JobDescription
-                    ""
-                    Nothing
+            , description = Description.init JobDescription ""
             }
     in
     ( model
@@ -198,7 +194,7 @@ handleCallback callback ( model, effects ) =
 
         DescriptionSaved id result ->
             let
-                ( descriptionModel, teffects ) =
+                ( descriptionModel, teffects, _ ) =
                     Description.handleDescriptionSaved id result ( model.description, effects )
             in
             ( { model | description = descriptionModel }, teffects )
@@ -280,7 +276,6 @@ handleDelivery delivery ( model, effects ) =
 
         _ ->
             ( model, effects )
-
 
 
 update : Message -> ET Model
@@ -646,7 +641,7 @@ viewMainJobsSection session model =
                                     )
                                 ]
                         ]
-                    , Description.view session model.description
+                    , Description.view False session.hovered model.description
                     , Html.div
                         [ id "pagination-header"
                         , style "display" "flex"

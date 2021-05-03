@@ -11,10 +11,13 @@ module Resource.Models exposing
 import Build.Output.Models exposing (OutputModel)
 import Concourse
 import Concourse.Pagination exposing (Page, Paginated)
+import HoverState
 import Login.Login as Login
 import Pinned exposing (CommentState, ResourcePinState)
 import Routes
 import Time
+import UserState exposing (UserState)
+import Views.Description as Description
 
 
 type PageError
@@ -38,20 +41,18 @@ type alias Model =
         , resourceIdentifier : Concourse.ResourceIdentifier
         , currentPage : Page
         , versions : Paginated Version
-        , pinCommentLoading : Bool
-        , textAreaFocused : Bool
         , icon : Maybe String
-        , isEditing : Bool
         , build : Maybe Concourse.Build
         , authorized : Bool
         , output : Maybe OutputModel
         , highlight : Routes.Highlight
         , highlightVersion : Maybe Concourse.Version
+        , pinComment : Description.Model
         }
 
 
 type alias PinnedVersion =
-    ResourcePinState Concourse.Version VersionId CommentState
+    ResourcePinState Concourse.Version VersionId
 
 
 type VersionEnabledState

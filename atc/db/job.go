@@ -60,6 +60,7 @@ type Job interface {
 	Name() string
 	Paused() bool
 	FirstLoggedBuildID() int
+	Description() string
 	TeamID() int
 	TeamName() string
 	Tags() []string
@@ -196,6 +197,8 @@ func (j *job) HasNewInputs() bool               { return j.hasNewInputs }
 func (j *job) ScheduleRequestedTime() time.Time { return j.scheduleRequestedTime }
 func (j *job) MaxInFlight() int                 { return j.maxInFlight }
 func (j *job) DisableManualTrigger() bool       { return j.disableManualTrigger }
+
+func (j *job) Description() string { return j.config.Description }
 
 func (j *job) Config() (atc.JobConfig, error) {
 	if j.config != nil {

@@ -1,7 +1,6 @@
 module Application.Application exposing
     ( Flags
     , Model
-    , handleCallback
     , handleDelivery
     , init
     , locationMsg

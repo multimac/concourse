@@ -13,7 +13,8 @@ type Job struct {
 	Paused       bool `json:"paused,omitempty"`
 	HasNewInputs bool `json:"has_new_inputs,omitempty"`
 
-	Groups []string `json:"groups,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Groups      []string `json:"groups,omitempty"`
 
 	FirstLoggedBuildID   int  `json:"first_logged_build_id,omitempty"`
 	DisableManualTrigger bool `json:"disable_manual_trigger,omitempty"`

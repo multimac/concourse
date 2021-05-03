@@ -61,6 +61,7 @@ type DomID
     | SaveCommentButton
     | DescriptionID ( DomID, DescriptionTarget )
     | JobDescription
+    | ResourcePinComment
     | ResourceCommentTextarea
     | ChangedStepLabel StepID String
     | StepState StepID

@@ -1,11 +1,11 @@
 module Views.Description exposing
-    ( EditConfig
-    , Model
+    ( Model
     , State
+    , cancel
     , handleDescriptionSaved
     , handleKeyDown
     , init
-    , setContent
+    , setPristineContent
     , update
     , view
     )
@@ -41,26 +41,18 @@ type alias Model =
     { id : DomID
     , content : String
     , pristineContent : String
-    , editConfig : Maybe EditConfig
     , state : State
     , focused : Bool
     }
 
 
-type alias EditConfig =
-    { canEdit : Session -> Bool
-    , onSave : String -> List Effect
-    }
-
-
-init : DomID -> String -> Maybe EditConfig -> Model
-init id content editConfig =
+init : DomID -> String -> Model
+init id content =
     let
         model =
             { id = id
             , content = content
             , pristineContent = content
-            , editConfig = editConfig
             , state = Viewing
             , focused = False
             }
@@ -68,20 +60,31 @@ init id content editConfig =
     model
 
 
-handleDescriptionSaved : DomID -> Fetched () -> ET Model
+cancel : Model -> Model
+cancel model =
+    case model.state of
+        Editing ->
+            { model | state = Viewing, content = model.pristineContent }
+
+        _ ->
+            model
+
+
+handleDescriptionSaved : DomID -> Fetched () -> ( Model, List Effect ) -> ( Model, List Effect, Bool )
 handleDescriptionSaved id result ( model, effects ) =
     if id == model.id then
         case result of
             Ok () ->
                 ( { model | pristineContent = model.content, state = Viewing }
                 , effects ++ [ SyncTextareaHeight (DescriptionID ( model.id, DescriptionContainer )) ]
+                , True
                 )
 
             _ ->
-                ( { model | state = Editing }, effects )
+                ( { model | state = Editing }, effects, False )
 
     else
-        ( model, effects )
+        ( model, effects, False )
 
 
 handleKeyDown : Keyboard.KeyEvent -> ET Model
@@ -91,17 +94,24 @@ handleKeyDown event ( model, effects ) =
             && Keyboard.hasControlModifier event
             && model.focused
     then
-        ( model, effects )
+        saveContent ( model, effects )
 
     else
         ( model, effects )
 
 
-setContent : Model -> String -> Model
-setContent model content =
+saveContent : ET Model
+saveContent ( model, effects ) =
+    ( { model | state = Saving }
+    , effects ++ [ SaveDescription model.id model.content ]
+    )
+
+
+setPristineContent : String -> Model -> Model
+setPristineContent content model =
     { model
-        | content = content
-        , pristineContent =
+        | pristineContent = content
+        , content =
             case model.state of
                 Viewing ->
                     content
@@ -115,13 +125,8 @@ update : Message -> ET Model
 update msg ( model, effects ) =
     case msg of
         Click (DescriptionID ( id, DescriptionCancelButton )) ->
-            if id == model.id && model.state == Editing then
-                ( { model
-                    | state = Viewing
-                    , content = model.pristineContent
-                  }
-                , effects
-                )
+            if id == model.id then
+                ( cancel model, effects )
 
             else
                 ( model, effects )
@@ -137,14 +142,7 @@ update msg ( model, effects ) =
 
         Click (DescriptionID ( id, DescriptionSaveButton )) ->
             if id == model.id then
-                case model.editConfig of
-                    Just config ->
-                        ( { model | state = Saving }
-                        , effects ++ config.onSave model.content
-                        )
-
-                    _ ->
-                        ( model, effects )
+                saveContent ( model, effects )
 
             else
                 ( model, effects )
@@ -176,8 +174,8 @@ update msg ( model, effects ) =
             ( model, effects )
 
 
-view : Session -> Model -> Html Message
-view session model =
+view : Bool -> HoverState.HoverState -> Model -> Html Message
+view canEdit hoverState model =
     Html.div
         (id
             (toHtmlID (DescriptionID ( model.id, DescriptionContainer )))
@@ -188,18 +186,14 @@ view session model =
             , image = Assets.MessageIcon
             }
             descriptionIconStyle
-            :: (case ( model.state, model.editConfig ) of
+            :: (case ( model.state, canEdit ) of
                     ( Viewing, _ ) ->
                         [ markdown model ]
 
-                    ( _, Just config ) ->
-                        if config.canEdit session then
-                            [ textarea model
-                            , editSaveWrapper model session
-                            ]
-
-                        else
-                            [ markdown model ]
+                    ( _, True ) ->
+                        [ textarea model
+                        , editSaveWrapper model hoverState
+                        ]
 
                     _ ->
                         [ markdown model ]
@@ -207,21 +201,21 @@ view session model =
         )
 
 
-button : Model -> Session -> DescriptionTarget -> Html Message -> (Bool -> List (Attribute Message)) -> Html Message
-button model session domID contents styling =
+button : Model -> HoverState.HoverState -> DescriptionTarget -> Html Message -> (Bool -> List (Attribute Message)) -> Html Message
+button model hoverState domID contents styling =
     Html.button
         ([ id (toHtmlID (DescriptionID ( model.id, domID )))
          , onClick (Click (DescriptionID ( model.id, domID )))
          , onMouseEnter (Hover (Just (DescriptionID ( model.id, domID ))))
          , onMouseLeave (Hover Nothing)
          ]
-            ++ styling (HoverState.isHovered (DescriptionID ( model.id, DescriptionEditButton )) session.hovered)
+            ++ styling (HoverState.isHovered (DescriptionID ( model.id, DescriptionEditButton )) hoverState)
         )
         [ contents ]
 
 
-editSaveWrapper : Model -> Session -> Html Message
-editSaveWrapper model session =
+editSaveWrapper : Model -> HoverState.HoverState -> Html Message
+editSaveWrapper model hoverState =
     Html.div
         descriptionEditSaveWrapperStyle
         (case model.state of
@@ -235,19 +229,19 @@ editSaveWrapper model session =
                      , onMouseEnter (Hover (Just (DescriptionID ( model.id, DescriptionEditButton ))))
                      , onMouseLeave (Hover Nothing)
                      ]
-                        ++ descriptionEditButtonStyle (HoverState.isHovered (DescriptionID ( model.id, DescriptionEditButton )) session.hovered)
+                        ++ descriptionEditButtonStyle (HoverState.isHovered (DescriptionID ( model.id, DescriptionEditButton )) hoverState)
                     )
                 ]
 
             Editing ->
-                [ button model session DescriptionCancelButton (Html.text "cancel") (descriptionSaveButtonStyle True)
-                , button model session DescriptionSaveButton (Html.text "save") (descriptionSaveButtonStyle (model.content /= model.pristineContent))
+                [ button model hoverState DescriptionCancelButton (Html.text "cancel") (descriptionSaveButtonStyle True)
+                , button model hoverState DescriptionSaveButton (Html.text "save") (descriptionSaveButtonStyle (model.content /= model.pristineContent))
                 ]
 
             Saving ->
                 [ button
                     model
-                    session
+                    hoverState
                     DescriptionSavingButton
                     (Spinner.spinner
                         { sizePx = 12

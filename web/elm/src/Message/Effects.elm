@@ -196,6 +196,7 @@ type Effect
     | LoadFavoritedPipelines
     | SaveFavoritedInstanceGroups (Set ( Concourse.TeamName, Concourse.PipelineName ))
     | LoadFavoritedInstanceGroups
+    | SaveDescription DomID String
 
 
 type alias VersionId =

@@ -97,6 +97,7 @@ import Time
 import Tooltip
 import UpdateMsg exposing (UpdateMsg)
 import UserState exposing (UserState(..))
+import Views.Description as Description
 import Views.DictView as DictView
 import Views.Icon as Icon
 import Views.Spinner as Spinner
@@ -147,16 +148,15 @@ init flags =
                 , pagination = { previousPage = Nothing, nextPage = Nothing }
                 }
             , now = Nothing
-            , pinCommentLoading = False
-            , textAreaFocused = False
             , isUserMenuExpanded = False
             , icon = Nothing
-            , isEditing = False
             , build = Nothing
             , authorized = True
             , output = Nothing
             , highlight = Routes.HighlightNothing
             , highlightVersion = flags.highlightVersion
+            , pinComment =
+                Description.init ResourcePinComment ""
             }
     in
     ( model
@@ -237,41 +237,33 @@ updatePinnedVersion resource model =
                     resource.pinComment |> Maybe.withDefault ""
             in
             case model.pinnedVersion of
-                UnpinningFrom c _ ->
-                    { model | pinnedVersion = UnpinningFrom c newVersion }
+                UnpinningFrom _ ->
+                    { model | pinnedVersion = UnpinningFrom newVersion }
 
-                PinnedDynamicallyTo { comment } _ ->
+                PinnedDynamicallyTo _ ->
                     { model
-                        | pinnedVersion =
-                            PinnedDynamicallyTo
-                                { comment = comment
-                                , pristineComment = pristineComment
-                                }
-                                newVersion
+                        | pinnedVersion = PinnedDynamicallyTo newVersion
+                        , pinComment = Description.setPristineContent pristineComment model.pinComment
                     }
 
-                Switching _ v _ ->
+                Switching v _ ->
                     if v == newVersion then
                         model
 
                     else
                         { model
-                            | pinnedVersion =
-                                PinnedDynamicallyTo
-                                    { comment = pristineComment
-                                    , pristineComment = pristineComment
-                                    }
-                                    newVersion
+                            | pinnedVersion = PinnedDynamicallyTo newVersion
+                            , pinComment =
+                                Description.cancel model.pinComment
+                                    |> Description.setPristineContent pristineComment
                         }
 
                 _ ->
                     { model
-                        | pinnedVersion =
-                            PinnedDynamicallyTo
-                                { comment = pristineComment
-                                , pristineComment = pristineComment
-                                }
-                                newVersion
+                        | pinnedVersion = PinnedDynamicallyTo newVersion
+                        , pinComment =
+                            Description.cancel model.pinComment
+                                |> Description.setPristineContent pristineComment
                     }
 
 
@@ -495,7 +487,7 @@ handleCallback callback session ( model, effects ) =
                                 PinningTo pt ->
                                     Just pt
 
-                                Switching _ _ pt ->
+                                Switching _ pt ->
                                     Just pt
 
                                 _ ->
@@ -512,13 +504,9 @@ handleCallback callback session ( model, effects ) =
                             model.versions.content
                                 |> List.Extra.find (\v -> Just v.id == pinningTo)
                                 |> Maybe.map .version
-                                |> Maybe.map
-                                    (PinnedDynamicallyTo
-                                        { comment = commentText
-                                        , pristineComment = ""
-                                        }
-                                    )
+                                |> Maybe.map PinnedDynamicallyTo
                                 |> Maybe.withDefault NotPinned
+                        , pinComment = Description.setPristineContent commentText model.pinComment
                       }
                     , effects
                         ++ [ SetPinComment
@@ -578,27 +566,16 @@ handleCallback callback session ( model, effects ) =
                 effects
             )
 
-        CommentSet result ->
-            ( { model
-                | pinCommentLoading = False
-                , pinnedVersion =
-                    case ( result, model.pinnedVersion ) of
-                        ( Ok (), PinnedDynamicallyTo { comment } v ) ->
-                            PinnedDynamicallyTo
-                                { comment = comment
-                                , pristineComment = comment
-                                }
-                                v
+        DescriptionSaved id result ->
+            let
+                ( pinCommentModel, teffects, saved ) =
+                    Description.handleDescriptionSaved id result ( model.pinComment, effects )
+            in
+            if saved then
+                ( { model | pinComment = pinCommentModel }, teffects ++ [ FetchResource model.resourceIdentifier ] )
 
-                        ( _, pv ) ->
-                            pv
-                , isEditing = result /= Ok ()
-              }
-            , effects
-                ++ [ FetchResource model.resourceIdentifier
-                   , SyncTextareaHeight ResourceCommentTextarea
-                   ]
-            )
+            else
+                ( { model | pinComment = pinCommentModel }, teffects )
 
         PlanAndResourcesFetched buildId (Ok planAndResources) ->
             updateOutput
@@ -638,22 +615,11 @@ handleDelivery : { a | hovered : HoverState.HoverState } -> Delivery -> ET Model
 handleDelivery session delivery ( model, effects ) =
     (case delivery of
         KeyDown keyEvent ->
-            if
-                (keyEvent.code == Keyboard.Enter)
-                    && Keyboard.hasControlModifier keyEvent
-                    && model.textAreaFocused
-            then
-                ( model
-                , case model.pinnedVersion of
-                    PinnedDynamicallyTo { comment } _ ->
-                        effects ++ [ SetPinComment model.resourceIdentifier comment ]
-
-                    _ ->
-                        effects
-                )
-
-            else
-                ( model, effects )
+            let
+                ( pinCommentModel, teffects ) =
+                    Description.handleKeyDown keyEvent ( model.pinComment, effects )
+            in
+            ( { model | pinComment = pinCommentModel }, teffects )
 
         ClockTicked OneSecond time ->
             ( { model | now = Just time }
@@ -762,7 +728,7 @@ update msg ( model, effects ) =
                         |> List.Extra.find (\v -> v.id == versionID)
             in
             case model.pinnedVersion of
-                PinnedDynamicallyTo _ v ->
+                PinnedDynamicallyTo v ->
                     version
                         |> Maybe.map
                             (\vn ->
@@ -804,7 +770,7 @@ update msg ( model, effects ) =
 
         Click PinIcon ->
             case model.pinnedVersion of
-                PinnedDynamicallyTo _ _ ->
+                PinnedDynamicallyTo _ ->
                     ( { model
                         | pinnedVersion =
                             Pinned.startUnpinning model.pinnedVersion
@@ -854,11 +820,6 @@ update msg ( model, effects ) =
             else
                 ( model, effects ++ [ RedirectToLogin ] )
 
-        Click EditButton ->
-            ( { model | isEditing = True }
-            , effects ++ [ Focus (toHtmlID ResourceCommentTextarea) ]
-            )
-
         Click (StepHeader id) ->
             updateOutput
                 (Build.Output.Output.handleStepTreeMsg <| StepTree.toggleStep id)
@@ -869,51 +830,19 @@ update msg ( model, effects ) =
                 (Build.Output.Output.handleStepTreeMsg <| StepTree.toggleStepInitialization id)
                 ( model, effects ++ [ SyncStickyBuildLogHeaders ] )
 
-        EditComment input ->
+        Click (DescriptionID _) ->
             let
-                newPinnedVersion =
-                    case model.pinnedVersion of
-                        PinnedDynamicallyTo { pristineComment } v ->
-                            PinnedDynamicallyTo
-                                { comment = input
-                                , pristineComment = pristineComment
-                                }
-                                v
-
-                        x ->
-                            x
+                ( pinCommentModel, teffects ) =
+                    Description.update msg ( model.pinComment, effects )
             in
-            ( { model | pinnedVersion = newPinnedVersion }
-            , effects ++ [ SyncTextareaHeight ResourceCommentTextarea ]
-            )
+            ( { model | pinComment = pinCommentModel }, teffects )
 
-        Click SaveCommentButton ->
-            case model.pinnedVersion of
-                PinnedDynamicallyTo commentState _ ->
-                    let
-                        commentChanged =
-                            commentState.comment /= commentState.pristineComment
-                    in
-                    if commentChanged then
-                        ( { model | pinCommentLoading = True }
-                        , effects
-                            ++ [ SetPinComment
-                                    model.resourceIdentifier
-                                    commentState.comment
-                               ]
-                        )
-
-                    else
-                        ( model, effects )
-
-                _ ->
-                    ( model, effects )
-
-        FocusTextArea ->
-            ( { model | textAreaFocused = True }, effects )
-
-        BlurTextArea ->
-            ( { model | textAreaFocused = False }, effects )
+        Description _ ->
+            let
+                ( pinCommentModel, teffects ) =
+                    Description.update msg ( model.pinComment, effects )
+            in
+            ( { model | pinComment = pinCommentModel }, teffects )
 
         _ ->
             ( model, effects )
@@ -1055,7 +984,7 @@ tooltip model session =
 
                 isPinnedDynamically =
                     case ( version, model.pinnedVersion ) of
-                        ( Just cur, PinnedDynamicallyTo _ v ) ->
+                        ( Just cur, PinnedDynamicallyTo v ) ->
                             cur.version == v
 
                         _ ->
@@ -1482,119 +1411,26 @@ checkButton ({ hovered, userState, checkStatus } as params) =
 
 
 commentBar :
-    { a
-        | userState : UserState
-        , pipelines : WebData (List Concourse.Pipeline)
-        , hovered : HoverState.HoverState
-    }
-    ->
-        { b
-            | pinnedVersion : Models.PinnedVersion
-            , resourceIdentifier : Concourse.ResourceIdentifier
-            , pinCommentLoading : Bool
-            , isEditing : Bool
-        }
+    { a | userState : UserState, resourceIdentifier : Concourse.ResourceIdentifier, hovered : HoverState.HoverState }
+    -> { b | pinnedVersion : Models.PinnedVersion, pinComment : Description.Model }
     -> Html Message
-commentBar session { resourceIdentifier, pinnedVersion, pinCommentLoading, isEditing } =
+commentBar session { pinnedVersion, pinComment } =
     case pinnedVersion of
-        PinnedDynamicallyTo commentState _ ->
+        PinnedDynamicallyTo _ ->
+            let
+                canEdit =
+                    UserState.isMember
+                        { teamName = session.resourceIdentifier.teamName
+                        , userState = session.userState
+                        }
+                        && not (isPipelineArchived session session.resourceIdentifier)
+            in
             Html.div
                 (id "comment-bar" :: Resource.Styles.commentBar True)
-                [ Html.div
-                    (id "icon-container" :: Resource.Styles.commentBarIconContainer isEditing)
-                    (Icon.icon
-                        { sizePx = 16
-                        , image = Assets.MessageIcon
-                        }
-                        Resource.Styles.commentBarMessageIcon
-                        :: (if
-                                UserState.isMember
-                                    { teamName = resourceIdentifier.teamName
-                                    , userState = session.userState
-                                    }
-                                    && not (isPipelineArchived session resourceIdentifier)
-                            then
-                                [ Html.textarea
-                                    ([ id (toHtmlID ResourceCommentTextarea)
-                                     , value commentState.comment
-                                     , onInput EditComment
-                                     , onFocus FocusTextArea
-                                     , onBlur BlurTextArea
-                                     , readonly (not isEditing)
-                                     ]
-                                        ++ Resource.Styles.commentTextArea
-                                    )
-                                    []
-                                , Html.div (id "edit-save-wrapper" :: Resource.Styles.editSaveWrapper)
-                                    (if isEditing == False then
-                                        [ editButton session ]
-
-                                     else
-                                        [ saveButton commentState pinCommentLoading session.hovered ]
-                                    )
-                                ]
-
-                            else
-                                [ Html.pre
-                                    Resource.Styles.commentText
-                                    [ Html.text commentState.pristineComment ]
-                                ]
-                           )
-                    )
-                ]
+                [ Description.view canEdit session.hovered pinComment ]
 
         _ ->
             Html.text ""
-
-
-editButton : { a | hovered : HoverState.HoverState } -> Html Message
-editButton session =
-    Icon.icon
-        { sizePx = 16
-        , image = Assets.PencilIcon
-        }
-        ([ id <| toHtmlID EditButton
-         , onMouseEnter <| Hover <| Just EditButton
-         , onMouseLeave <| Hover Nothing
-         , onClick <| Click EditButton
-         ]
-            ++ Resource.Styles.editButton (HoverState.isHovered EditButton session.hovered)
-        )
-
-
-saveButton :
-    { s | comment : String, pristineComment : String }
-    -> Bool
-    -> HoverState.HoverState
-    -> Html Message
-saveButton commentState pinCommentLoading hovered =
-    Html.button
-        (let
-            commentChanged =
-                commentState.comment
-                    /= commentState.pristineComment
-         in
-         [ id "save-button"
-         , onMouseEnter <| Hover <| Just SaveCommentButton
-         , onMouseLeave <| Hover Nothing
-         , onClick <| Click SaveCommentButton
-         ]
-            ++ Resource.Styles.commentSaveButton
-                { isHovered = HoverState.isHovered SaveCommentButton hovered
-                , commentChanged = commentChanged
-                , pinCommentLoading = pinCommentLoading
-                }
-        )
-        (if pinCommentLoading then
-            [ Spinner.spinner
-                { sizePx = 12
-                , margin = "0"
-                }
-            ]
-
-         else
-            [ Html.text "save" ]
-        )
 
 
 pinTools :
@@ -1607,8 +1443,7 @@ pinTools :
         { b
             | pinnedVersion : Models.PinnedVersion
             , resourceIdentifier : Concourse.ResourceIdentifier
-            , pinCommentLoading : Bool
-            , isEditing : Bool
+            , pinComment : Description.Model
         }
     -> Html Message
 pinTools session model =
@@ -1653,7 +1488,7 @@ pinBar session { pinnedVersion, resourceIdentifier } =
 
         isPinnedDynamically =
             case pinnedVersion of
-                PinnedDynamicallyTo _ _ ->
+                PinnedDynamicallyTo _ ->
                     True
 
                 _ ->
