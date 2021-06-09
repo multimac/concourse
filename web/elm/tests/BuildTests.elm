@@ -644,6 +644,7 @@ all =
                                         , finishedAt = Nothing
                                         }
                                     , reapTime = Nothing
+                                    , comment = ""
                                     }
                             )
                         |> Tuple.first
