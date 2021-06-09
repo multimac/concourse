@@ -17,7 +17,7 @@ import Api.Endpoints as Endpoints
 import Application.Models exposing (Session)
 import Assets
 import Build.Header.Header as Header
-import Build.Header.Models exposing (BuildPageType(..), CurrentOutput(..))
+import Build.Header.Models exposing (BuildComment(..), BuildPageType(..), CurrentOutput(..))
 import Build.Models exposing (Model, toMaybe)
 import Build.Output.Models exposing (OutputModel)
 import Build.Output.Output
@@ -105,6 +105,7 @@ init flags =
           , disableManualTrigger = False
           , history = []
           , nextPage = Nothing
+          , comment = Viewing ""
           , prep = Nothing
           , duration = { startedAt = Nothing, finishedAt = Nothing }
           , status = BuildStatusPending
@@ -123,6 +124,7 @@ init flags =
           , hasLoadedYet = False
           , notFound = False
           , reapTime = Nothing
+          , shortcutsEnabled = True
           }
         , [ GetCurrentTime
           , GetCurrentTimeZone

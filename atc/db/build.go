@@ -96,7 +96,8 @@ var buildsQuery = psql.Select(`
 		b.rerun_of,
 		rb.name,
 		b.rerun_number,
-		b.span_context
+		b.span_context,
+		b.comment
 	`).
 	From("builds b").
 	JoinClause("LEFT OUTER JOIN jobs j ON b.job_id = j.id").
@@ -135,6 +136,7 @@ type Build interface {
 	Schema() string
 	PrivatePlan() atc.Plan
 	PublicPlan() *json.RawMessage
+	Comment() string
 	HasPlan() bool
 	Status() BuildStatus
 	CreateTime() time.Time
@@ -172,6 +174,7 @@ type Build interface {
 	Variables(lager.Logger, creds.Secrets, creds.VarSourcePool) (vars.Variables, error)
 
 	SetInterceptible(bool) error
+	SetComment(string) error
 
 	Events(uint) (EventSource, error)
 	SaveEvent(event atc.Event) error
@@ -216,6 +219,7 @@ type build struct {
 
 	teamID   int
 	teamName string
+	comment  string
 
 	jobID   int
 	jobName string
@@ -359,6 +363,7 @@ func (b *build) ResourceTypeName() string     { return b.resourceTypeName }
 func (b *build) TeamID() int                  { return b.teamID }
 func (b *build) TeamName() string             { return b.teamName }
 func (b *build) IsManuallyTriggered() bool    { return b.isManuallyTriggered }
+func (b *build) Comment() string              { return b.comment }
 func (b *build) Schema() string               { return b.schema }
 func (b *build) PrivatePlan() atc.Plan        { return b.privatePlan }
 func (b *build) PublicPlan() *json.RawMessage { return b.publicPlan }
@@ -414,6 +419,35 @@ func (b *build) Interceptible() (bool, error) {
 	}
 
 	return interceptible, nil
+}
+
+func (b *build) SetComment(comment string) error {
+	var nullComment sql.NullString
+	if comment != "" {
+		nullComment = sql.NullString{String: comment, Valid: true}
+	}
+
+	rows, err := psql.Update("builds").
+		Set("comment", nullComment).
+		Where(sq.Eq{
+			"id": b.id,
+		}).
+		RunWith(b.conn).
+		Exec()
+	if err != nil {
+		return err
+	}
+
+	affected, err := rows.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return ErrBuildDisappeared
+	}
+
+	return nil
 }
 
 func (b *build) SetInterceptible(i bool) error {
@@ -1771,7 +1805,7 @@ func scanBuild(b *build, row scannable, encryptionStrategy encryption.Strategy) 
 		nonce, spanContext, createdBy                                                                       sql.NullString
 		drained, aborted, completed                                                                         bool
 		status                                                                                              string
-		pipelineInstanceVars                                                                                sql.NullString
+		pipelineInstanceVars, comment                                                                       sql.NullString
 	)
 
 	err := row.Scan(
@@ -1808,6 +1842,7 @@ func scanBuild(b *build, row scannable, encryptionStrategy encryption.Strategy) 
 		&rerunOfName,
 		&rerunNumber,
 		&spanContext,
+		&comment,
 	)
 	if err != nil {
 		return err
@@ -1833,6 +1868,7 @@ func scanBuild(b *build, row scannable, encryptionStrategy encryption.Strategy) 
 	b.rerunOf = int(rerunOf.Int64)
 	b.rerunOfName = rerunOfName.String
 	b.rerunNumber = int(rerunNumber.Int64)
+	b.comment = comment.String
 
 	var (
 		noncense      *string

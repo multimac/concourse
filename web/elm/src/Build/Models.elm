@@ -46,9 +46,11 @@ type alias ShortcutsModel r =
         , history : List HistoryItem
         , name : String
         , job : Maybe Concourse.JobIdentifier
+        , comment : Build.Header.Models.BuildComment
         , status : BuildStatus.BuildStatus
         , isTriggerBuildKeyDown : Bool
         , duration : Concourse.BuildDuration
+        , shortcutsEnabled : Bool
     }
 
 
