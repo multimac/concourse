@@ -65,7 +65,7 @@ historyItem model =
     , comment =
         case model.comment of
             Hidden comment ->
-                CommentBar.getContent comment
+                comment
 
             Visible comment ->
                 CommentBar.getContent comment

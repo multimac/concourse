@@ -19,6 +19,7 @@ type alias Model r =
     { r
         | id : Int
         , name : String
+        , authorized : Bool
         , job : Maybe Concourse.JobIdentifier
         , scrolledToCurrentBuild : Bool
         , history : List HistoryItem
@@ -50,7 +51,7 @@ type CurrentOutput
 
 
 type CommentBarVisibility
-    = Hidden CommentBar.Model
+    = Hidden String
     | Visible CommentBar.Model
 
 
